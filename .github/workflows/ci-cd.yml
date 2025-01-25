@@ -42,8 +42,9 @@ jobs:
           pytest tests/ --cov=src --cov-report=xml
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
-          token: \${{ secrets.CODECOV_TOKEN }}  # Added this line
+          token: \${{ secrets.CODECOV_TOKEN }}
+          slug: gsivakumar99/california-housing-mlops
           file: ./coverage.xml
           fail_ci_if_error: true
