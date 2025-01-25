@@ -33,6 +33,7 @@ jobs:
 
       - name: Code formatting check
         run: |
+          black src tests
           black --check src tests
           isort --check-only src tests
           flake8 src tests
