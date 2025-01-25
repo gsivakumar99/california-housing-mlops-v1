@@ -10,15 +10,15 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4    # Updated from v2
+      - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4    # Updated from v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.12'
 
       - name: Cache pip packages
-        uses: actions/cache@v3    # Updated from v2
+        uses: actions/cache@v3
         with:
           path: ~/.cache/pip
           key: \${{ runner.os }}-pip-\${{ hashFiles('requirements*.txt') }}
@@ -33,10 +33,12 @@ jobs:
 
       - name: Code format check
         run: |
+          # Debug directory structure
+          ls -R
           # Verify formatting
-          black --check src tests
-          isort --check-only src tests
-          flake8 src tests
+          black --check .
+          isort --check-only .
+          flake8 .
 
       - name: Run tests with coverage
         run: |
