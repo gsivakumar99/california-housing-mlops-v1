@@ -33,12 +33,10 @@ jobs:
 
       - name: Code format check
         run: |
-          # Debug directory structure
-          ls -R
           # Verify formatting
-          black --check .
-          isort --check-only .
-          flake8 .
+          black --check ./src ./tests
+          isort --check-only ./src ./tests
+          flake8 ./src ./tests
 
       - name: Run tests with coverage
         run: |
