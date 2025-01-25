@@ -21,7 +21,7 @@ def train_model(n_estimators=100, max_depth=10):
     model_version_dir = os.path.join(MODEL_DIR, f'model_{timestamp}')
     os.makedirs(model_version_dir, exist_ok=True)
 
-    with mlflow.start_run() as run:
+    with mlflow.start_run():
         # Load and preprocess data
         df = load_data()
         X_train, X_test, y_train, y_test = preprocess_data(df)
@@ -31,7 +31,8 @@ def train_model(n_estimators=100, max_depth=10):
         mlflow.log_param("max_depth", max_depth)
 
         # Train model
-        model = HousePriceModel(n_estimators=n_estimators, max_depth=max_depth)
+        model = HousePriceModel(n_estimators=n_estimators,
+                                max_depth=max_depth)
         model.fit(X_train, y_train)
 
         # Evaluate model
@@ -39,8 +40,10 @@ def train_model(n_estimators=100, max_depth=10):
         test_pred = model.predict(X_test)
 
         # Log metrics
-        mlflow.log_metric("train_mse", mean_squared_error(y_train, train_pred))
-        mlflow.log_metric("test_mse", mean_squared_error(y_test, test_pred))
+        mlflow.log_metric("train_mse", mean_squared_error(y_train,
+                                                          train_pred))
+        mlflow.log_metric("test_mse", mean_squared_error(y_test,
+                                                         test_pred))
         mlflow.log_metric("test_r2", r2_score(y_test, test_pred))
 
         # Create model signature
