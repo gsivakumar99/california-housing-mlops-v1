@@ -42,7 +42,7 @@ def predict():
         return jsonify({
             'status': 'success',
             'prediction': float(prediction[0]),
-            'feature_names': feature_names  # No need for tolist() as it's already a list
+            'feature_names': feature_names  
         })
     except Exception as e:
         return jsonify({
@@ -55,7 +55,7 @@ def predict():
 def info():
     """Endpoint to get information about expected features"""
     return jsonify({
-        'feature_names': feature_names,  # No need for tolist() as it's already a list
+        'feature_names': feature_names,  
         'description': 'California Housing Price Prediction Model',
         'feature_descriptions': {
             'MedInc': 'Median income in block group',
@@ -68,7 +68,8 @@ def info():
             'Longitude': 'Block group longitude'
         },
         'example_input': {
-            'features': [8.3252, 41.0, 6.984127, 1.023810, 322.0, 2.555556, 37.88, -122.23]
+            'features': [8.3252, 41.0, 6.984127, 1.023810, 322.0, 
+            2.555556, 37.88, -122.23]
         }
     })
 

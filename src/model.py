@@ -2,6 +2,7 @@ from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.ensemble import RandomForestRegressor
 
 
+# ML model
 class HousePriceModel(BaseEstimator, RegressorMixin):
     def __init__(self, n_estimators=100, max_depth=10):
         self.n_estimators = n_estimators
