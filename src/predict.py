@@ -1,9 +1,8 @@
 import logging
 import os
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict
 
 import mlflow
-import numpy as np
 import pandas as pd
 from flask import Flask, jsonify, request
 from sklearn.datasets import fetch_california_housing
