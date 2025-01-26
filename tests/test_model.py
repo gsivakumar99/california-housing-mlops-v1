@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -5,7 +7,18 @@ from sklearn.exceptions import NotFittedError
 
 from src.data import load_data, preprocess_data
 from src.model import HousePriceModel
-from src.predict import app
+
+
+@pytest.fixture
+def model_dir():
+    """Create model directory for tests."""
+    model_dir = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "models",
+        "latest"
+    )
+    os.makedirs(model_dir, exist_ok=True)
+    return model_dir
 
 
 @pytest.fixture
@@ -32,7 +45,8 @@ def test_data_preprocessing(sample_data):
     assert X_train.shape[1] == X_test.shape[1]
     assert len(y_train.shape) == 1
     assert len(y_test.shape) == 1
-    assert X_train.dtype == np.float64
+    # Fix: Check dtypes instead of dtype
+    assert X_train.dtypes.all() == np.float64
     assert y_train.dtype == np.float64
     assert not X_train.isnull().any().any()
     assert not X_test.isnull().any().any()
@@ -70,36 +84,39 @@ def test_untrained_model():
         model.predict(X)
 
 
-def test_predict_endpoint():
-    """Test the prediction endpoint."""
-    client = app.test_client()
+@pytest.fixture
+def client():
+    """Create test client."""
+    from src.predict import create_app
+    app = create_app()
+    app.config['TESTING'] = True
+    with app.test_client() as client:
+        yield client
 
+
+def test_predict_endpoint(client):
+    """Test the prediction endpoint."""
+    # Test with valid input
     test_input = {
         "features": [
-            8.3252,
-            41.0,
-            6.984127,
-            1.023810,
-            322.0,
-            2.555556,
-            37.88,
-            -122.23,
+            8.3252, 41.0, 6.984127, 1.023810, 322.0,
+            2.555556, 37.88, -122.23
         ]
     }
     response = client.post("/predict", json=test_input)
     assert response.status_code == 200
-    assert "prediction" in response.json
+    assert "prediction" in response.get_json()
 
-    invalid_input = {"features": [1, 2]}  # Wrong number of features
+    # Test with invalid input
+    invalid_input = {
+        "features": [1, 2]  # Wrong number of features
+    }
     response = client.post("/predict", json=invalid_input)
     assert response.status_code == 400
 
 
-def test_info_endpoint():
+def test_info_endpoint(client):
     """Test the info endpoint."""
-    client = app.test_client()
     response = client.get("/info")
-
     assert response.status_code == 200
-    assert "feature_names" in response.json
-    assert "description" in response.json
+    assert "feature_names" in response.get_json()

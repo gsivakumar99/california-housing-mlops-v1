@@ -1,8 +1,9 @@
 import logging
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Union
 
 import mlflow
+import numpy as np
 import pandas as pd
 from flask import Flask, jsonify, request
 from sklearn.datasets import fetch_california_housing
@@ -58,17 +59,34 @@ def validate_features(features: list) -> bool:
     bool
         True if features are valid, False otherwise
     """
-    if not isinstance(features, list):
+    try:
+        if not isinstance(features, list):
+            return False
+        if len(features) != len(feature_names):
+            return False
+        if not all(isinstance(x, (int, float)) for x in features):
+            return False
+        return True
+    except Exception:
         return False
-    if len(features) != len(feature_names):
-        return False
-    if not all(isinstance(x, (int, float)) for x in features):
-        return False
-    return True
 
 
-# Load the model at startup
-model = load_model()
+# Initialize model as None
+model = None
+
+
+def get_model():
+    """Get or load the model.
+
+    Returns
+    -------
+    Any
+        The loaded model
+    """
+    global model
+    if model is None:
+        model = load_model()
+    return model
 
 
 @app.route("/health", methods=["GET"])
@@ -80,7 +98,12 @@ def health_check() -> Dict[str, str]:
     Dict[str, str]
         Health status
     """
-    return jsonify({"status": "healthy"})
+    try:
+        get_model()
+        return jsonify({"status": "healthy"})
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return jsonify({"status": "unhealthy", "error": str(e)}), 500
 
 
 @app.route("/predict", methods=["POST"])
@@ -93,11 +116,13 @@ def predict() -> Dict[str, Any]:
         Prediction results or error message
     """
     try:
-        # Get and validate input
         if not request.is_json:
             raise ValueError("Request must be JSON")
 
-        features = request.json.get("features")
+        if "features" not in request.json:
+            raise ValueError("Missing 'features' in request")
+
+        features = request.json["features"]
         if not validate_features(features):
             raise ValueError(
                 f"Invalid features. Expected {len(feature_names)} "
@@ -106,7 +131,7 @@ def predict() -> Dict[str, Any]:
 
         # Create DataFrame and make prediction
         df = pd.DataFrame([features], columns=feature_names)
-        prediction = model.predict(df)
+        prediction = get_model().predict(df)
 
         return jsonify({
             "status": "success",
@@ -114,12 +139,18 @@ def predict() -> Dict[str, Any]:
             "feature_names": feature_names
         })
 
-    except Exception as e:
-        logger.error(f"Prediction error: {str(e)}")
+    except ValueError as e:
+        logger.warning(f"Invalid request: {e}")
         return jsonify({
             "status": "error",
             "message": str(e)
         }), 400
+    except Exception as e:
+        logger.error(f"Prediction error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": "Internal server error"
+        }), 500
 
 
 @app.route("/info", methods=["GET"])
@@ -174,20 +205,28 @@ def model_version() -> Dict[str, Any]:
             }
         })
     except Exception as e:
+        logger.error(f"Error getting model version: {e}")
         return jsonify({
             "status": "error",
-            "message": f"Error getting model version: {str(e)}"
-        }), 400
+            "message": str(e)
+        }), 500
 
 
-def create_app() -> Flask:
+def create_app(testing: bool = False) -> Flask:
     """Create and configure the Flask app.
+
+    Parameters
+    ----------
+    testing : bool, default=False
+        Whether to create the app in testing mode
 
     Returns
     -------
     Flask
         Configured Flask application
     """
+    if testing:
+        app.config['TESTING'] = True
     return app
 
 
