@@ -15,7 +15,7 @@ def save_data() -> None:
     housing = fetch_california_housing()
     df = pd.DataFrame(housing.data, columns=housing.feature_names)
     df["PRICE"] = housing.target
-    
+
     os.makedirs("data", exist_ok=True)
     df.to_csv(DATA_PATH, index=False)
 
@@ -36,7 +36,7 @@ def load_data() -> pd.DataFrame:
         # If file doesn't exist, create it
         save_data()
         df = pd.read_csv(DATA_PATH)
-    
+
     return df
 
 
