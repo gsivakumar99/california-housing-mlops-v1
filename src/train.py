@@ -88,7 +88,7 @@ def train_model(n_estimators=100, max_depth=10):
                 os.unlink(latest_path)
             elif os.path.isdir(latest_path):
                 shutil.rmtree(latest_path)
-        
+ 
         os.symlink(model_version_dir, latest_path)
 
         # Log model to MLflow
