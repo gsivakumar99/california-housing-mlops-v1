@@ -57,7 +57,7 @@ def train_model(n_estimators=100, max_depth=10):
 
         # Log metrics
         mlflow.log_metric(
-            "train_mse", 
+            "train_mse",
             mean_squared_error(y_train, train_pred)
         )
         mlflow.log_metric("test_mse", mean_squared_error(y_test, test_pred))
