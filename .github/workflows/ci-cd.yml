@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [ master ]
 
-# Prevent multiple workflows from running simultaneously
 concurrency:
   group: \${{ github.workflow }}-\${{ github.ref }}
   cancel-in-progress: true
@@ -15,17 +14,14 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      # Check out repository
       - uses: actions/checkout@v4
 
-      # Setup Python environment
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: 'pip'
 
-      # Cache pip dependencies
       - name: Cache pip packages
         uses: actions/cache@v3
         with:
@@ -34,7 +30,30 @@ jobs:
           restore-keys: |
             \${{ runner.os }}-pip-
 
-      # Try to restore previous DVC storage
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      # Initial Setup: Create directories and DVC config
+      - name: Initial Setup
+        run: |
+          # Create necessary directories
+          mkdir -p data
+          mkdir -p dvc_storage
+          mkdir -p models
+          
+          # Create .gitignore files if they don't exist
+          echo "/cache" > .dvc/.gitignore
+          echo "/tmp" >> .dvc/.gitignore
+          echo "/plots" >> .dvc/.gitignore
+          
+          echo "*" > data/.gitignore
+          echo "!.gitignore" >> data/.gitignore
+          echo "!*.dvc" >> data/.gitignore
+
+      # Download previous DVC storage if available
       - name: Download previous DVC storage
         uses: actions/download-artifact@v4
         with:
@@ -42,23 +61,38 @@ jobs:
           path: dvc_storage
         continue-on-error: true
 
-      # Install Python dependencies
-      - name: Install dependencies
+      # Prepare and validate data
+      - name: Prepare and validate data
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
-
-      # Setup DVC and manage data/models
-      - name: Setup DVC and manage artifacts
-        run: |
-          # Setup storage
-          mkdir -p dvc_storage
+          # Create dataset
+          python -c "
+          from sklearn.datasets import fetch_california_housing
+          import pandas as pd
+          import numpy as np
           
-          # Add data to DVC (if not already tracked)
-          if [ ! -f data/california_housing.csv.dvc ]; then
-            dvc add data/california_housing.csv
-          fi
+          # Download data
+          housing = fetch_california_housing()
+          df = pd.DataFrame(housing.data, columns=housing.feature_names)
+          df['PRICE'] = housing.target
+          
+          # Validate data
+          assert not df.isnull().any().any(), 'Data contains null values'
+          assert len(df) > 0, 'Dataset is empty'
+          assert all(col in df.columns for col in housing.feature_names), 'Missing features'
+          assert 'PRICE' in df.columns, 'Missing target variable'
+          
+          # Save data
+          df.to_csv('data/california_housing.csv', index=False)
+          print('Data validation successful')
+          print(f'Dataset shape: {df.shape}')
+          print(f'Features: {df.columns.tolist()}')
+          "
+
+      # Setup and manage DVC
+      - name: Setup and manage DVC
+        run: |
+          # Add data to DVC
+          dvc add data/california_housing.csv
           
           # Push to DVC storage
           dvc push
@@ -81,15 +115,15 @@ jobs:
           export MLFLOW_TRACKING_URI="file://\${{ github.workspace }}/mlruns"
           python -m src.train
 
-      # Track models with DVC after training
-      - name: Track models with DVC
+      # Track models with DVC
+      - name: Track models
         run: |
           if [ -d models ]; then
             dvc add models/
             dvc push
           fi
 
-      # Upload coverage report to Codecov
+      # Upload coverage to Codecov
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
@@ -98,24 +132,35 @@ jobs:
           file: ./coverage.xml
           fail_ci_if_error: true
 
-      # Store MLflow runs as artifact
+      # Store MLflow runs
       - name: Upload MLflow runs
         uses: actions/upload-artifact@v4
         with:
           name: mlflow-runs
           path: mlruns/
 
-      # Store DVC storage as artifact
+      # Store DVC storage
       - name: Upload DVC storage
         uses: actions/upload-artifact@v4
         with:
           name: dvc-storage
           path: dvc_storage/
 
-      # Store trained models as artifact (backup)
+      # Store trained models
       - name: Upload trained models
         uses: actions/upload-artifact@v4
         with:
           name: trained-models
           path: models/
         if: always()
+
+      # Optional: Commit DVC changes back to repository
+      - name: Commit DVC files
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add data/*.dvc
+          git add models/*.dvc || true
+          git commit -m "Update data and model tracking [skip ci]" || true
+          git push || true
