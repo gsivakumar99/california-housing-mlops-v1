@@ -1,0 +1,62 @@
+name: Data Version Creation
+
+on:
+  workflow_dispatch:  # Manual trigger
+  schedule:
+    - cron: '0 0 1 * *'  # Run monthly
+
+jobs:
+  create-data-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download previous DVC storage
+        uses: actions/download-artifact@v4
+        with:
+          name: dvc-storage
+          path: dvc_storage
+        continue-on-error: true
+
+      - name: Create new data version
+        run: |
+          python -m src.create_data_version
+
+      - name: Setup and manage DVC with version tracking
+        run: |
+          # Add both data and version info to DVC
+          dvc add data/california_housing.csv data/version_info.json
+          
+          # Create a tag for this version
+          version_tag="v_\$(date +'%Y%m%d_%H%M%S')"
+          dvc tag add \
+            data/california_housing.csv.dvc \
+            "\$version_tag"
+          
+          # Push to DVC storage
+          dvc push
+
+      - name: Store DVC storage
+        uses: actions/upload-artifact@v4
+        with:
+          name: dvc-storage
+          path: dvc_storage/
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add data/*.dvc data/version_info.json
+          git commit -m "Update data version [skip ci]" || true
+          git push || true

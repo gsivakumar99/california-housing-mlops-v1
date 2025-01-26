@@ -6,17 +6,26 @@ on:
   pull_request:
     branches: [ master ]
 
+concurrency:
+  group: \${{ github.workflow }}-\${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Check out repository
+      - name: Checkout code
+        uses: actions/checkout@v4
 
+      # Setup Python environment
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: 'pip'
 
+      # Cache pip dependencies
       - name: Cache pip packages
         uses: actions/cache@v3
         with:
@@ -25,26 +34,147 @@ jobs:
           restore-keys: |
             \${{ runner.os }}-pip-
 
+      # Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
-      - name: Code format check
+      # Create necessary directories
+      - name: Create directories
+        run: |
+          mkdir -p data
+          mkdir -p .dvc/cache
+          mkdir -p models/latest
+          mkdir -p mlruns
+
+      # Restore DVC cache if available
+      - name: Restore DVC cache
+        uses: actions/cache@v3
+        with:
+          path: .dvc/cache
+          key: \${{ runner.os }}-dvc-\${{ hashFiles('dvc.lock') }}
+          restore-keys: |
+            \${{ runner.os }}-dvc-
+
+      # Initialize and configure DVC
+      - name: Setup DVC
+        run: |
+          dvc init --no-scm -f
+          dvc remote add -d local .dvc/cache
+          
+          # Show DVC config for debugging
+          echo "DVC Configuration:"
+          cat .dvc/config
+          
+          # Show initial structure
+          echo "Initial directory structure:"
+          ls -la
+          ls -la .dvc/
+
+      # Create and validate dataset
+      - name: Create dataset
+        run: |
+          python -m src.create_data_version
+          echo "Dataset created:"
+          ls -la data/
+
+      # Track data with DVC
+      - name: Track data with DVC
+        run: |
+          # Add data to DVC
+          dvc add data/california_housing.csv
+          
+          # Push to cache
+          dvc push -v
+          
+          # Show cache contents
+          echo "DVC cache contents:"
+          ls -la .dvc/cache
+          
+          # Show data tracking status
+          dvc status
+
+      # Run code quality checks
+      - name: Code quality checks
         run: |
           black --check ./src ./tests
           isort --check-only ./src ./tests
           flake8 ./src ./tests
 
-      - name: Run tests with coverage
+      # Train initial model
+      - name: Train model
+        run: |
+          # Clean up existing model directories
+          rm -rf models/latest
+          # Train new model
+          python -m src.train
+
+      # Run tests with coverage
+      - name: Run tests
         run: |
           pytest tests/ --cov=src --cov-report=xml
 
-      - name: Upload coverage to Codecov
+      # Upload coverage to Codecov
+      - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
           token: \${{ secrets.CODECOV_TOKEN }}
           slug: gsivakumar99/california-housing-mlops
           file: ./coverage.xml
           fail_ci_if_error: true
+
+      # Store MLflow runs
+      - name: Upload MLflow runs
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlflow-runs
+          path: mlruns/
+          retention-days: 5
+
+      # Store DVC cache
+      - name: Upload DVC cache
+        uses: actions/upload-artifact@v4
+        with:
+          name: dvc-storage
+          path: .dvc/cache/
+          retention-days: 5
+        if: always()
+
+      # Store trained models
+      - name: Upload trained models
+        uses: actions/upload-artifact@v4
+        with:
+          name: trained-models
+          path: models/
+          retention-days: 5
+        if: success()
+
+      # Debug information
+      - name: Debug Info
+        if: always()
+        run: |
+          echo "Current directory structure:"
+          ls -R
+          echo "DVC status:"
+          dvc status
+          echo "DVC remote status:"
+          dvc remote list
+          echo "Available artifacts:"
+          for dir in mlruns .dvc/cache models data; do
+            echo "Contents of \$dir:"
+            if [ -d "\$dir" ]; then
+              ls -la "\$dir"
+            else
+              echo "Directory \$dir does not exist"
+            fi
+          done
+
+      # Cache DVC storage for future runs
+      - name: Cache DVC storage
+        uses: actions/cache@v3
+        with:
+          path: .dvc/cache
+          key: \${{ runner.os }}-dvc-\${{ github.sha }}
+        if: success()
