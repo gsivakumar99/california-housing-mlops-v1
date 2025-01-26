@@ -48,11 +48,11 @@ def test_data_preprocessing(sample_data):
     assert X_train.shape[1] == X_test.shape[1]
     assert len(y_train.shape) == 1
     assert len(y_test.shape) == 1
-    
+
     # Check each column's dtype
     assert all(dtype == np.float64 for dtype in X_train.dtypes)
     assert y_train.dtype == np.float64
-    
+
     # Check for missing values
     assert not X_train.isnull().any().any()
     assert not X_test.isnull().any().any()
@@ -65,11 +65,11 @@ def client():
 
     # Initialize the app in test mode
     app = create_app(testing=True)
-    
+
     # Ensure model is loaded before tests
     with app.app_context():
         ensure_model_loaded()
-    
+
     with app.test_client() as client:
         yield client
 

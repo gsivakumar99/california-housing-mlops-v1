@@ -48,7 +48,7 @@ def preprocess_data(
     """
     # Separate features and target
     y = df["PRICE"]
-    
+
     # Select appropriate features
     feature_cols = [col for col in df.columns if col != "PRICE"]
     X = df[feature_cols]
