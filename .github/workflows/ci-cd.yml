@@ -47,7 +47,7 @@ jobs:
         run: |
           mkdir -p data
           mkdir -p dvc_storage
-          mkdir -p models/latest
+          mkdir -p models
           mkdir -p mlruns
 
       # Restore DVC cache
@@ -87,9 +87,12 @@ jobs:
           dvc add data/california_housing.csv
           dvc push
 
-      # Train initial model
+      # Clean up and train model
       - name: Train model
         run: |
+          # Clean up existing model directories
+          rm -rf models/latest
+          # Train new model
           python -m src.train
 
       # Run tests with coverage
@@ -128,17 +131,6 @@ jobs:
           path: models/
           retention-days: 5
         if: success()
-
-      # Optional: Store test results
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: |
-            .coverage
-            coverage.xml
-          retention-days: 5
-        if: always()
 
       # Cache DVC storage for future runs
       - name: Cache DVC storage
