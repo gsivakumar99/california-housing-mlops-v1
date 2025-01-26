@@ -1,13 +1,21 @@
+# Models (ignore actual model files but track .dvc files)
+/models/*
+!/models/*.dvc
+
+# DVC
+/dvc_storage
+/data/*
+!/data/*.dvc
+*.dvc.db
+*.dvc.dir
+
+# MLflow
+/mlruns
+
 # Python
 __pycache__/
 *.py[cod]
-*\$py.class
 *.so
-.Python
-venv/
-ENV/
-
-# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -20,25 +28,18 @@ lib64/
 parts/
 sdist/
 var/
-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 
-# MLflow
-mlruns/
+# Coverage
+.coverage
+coverage.xml
 
-# Model files
-models/
+# Virtual Environment
+venv/
+ENV/
 
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# VS Code
+# IDE
+.idea/
 .vscode/
-
-# Mac OS
-.DS_Store
-
-# Environment variables
-.env
