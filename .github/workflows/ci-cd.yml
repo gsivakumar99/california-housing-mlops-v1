@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [ master ]
 
-# Prevent multiple workflows from running simultaneously
 concurrency:
   group: \${{ github.workflow }}-\${{ github.ref }}
   cancel-in-progress: true
@@ -46,11 +45,11 @@ jobs:
       - name: Create directories
         run: |
           mkdir -p data
-          mkdir -p dvc_storage
-          mkdir -p models
+          mkdir -p .dvc/cache
+          mkdir -p models/latest
           mkdir -p mlruns
 
-      # Restore DVC cache
+      # Restore DVC cache if available
       - name: Restore DVC cache
         uses: actions/cache@v3
         with:
@@ -59,13 +58,43 @@ jobs:
           restore-keys: |
             \${{ runner.os }}-dvc-
 
-      # Download previous DVC storage
-      - name: Download previous DVC storage
-        uses: actions/download-artifact@v4
-        with:
-          name: dvc-storage
-          path: dvc_storage
-        continue-on-error: true
+      # Initialize and configure DVC
+      - name: Setup DVC
+        run: |
+          dvc init --no-scm -f
+          dvc remote add -d local .dvc/cache
+          
+          # Show DVC config for debugging
+          echo "DVC Configuration:"
+          cat .dvc/config
+          
+          # Show initial structure
+          echo "Initial directory structure:"
+          ls -la
+          ls -la .dvc/
+
+      # Create and validate dataset
+      - name: Create dataset
+        run: |
+          python -m src.create_data_version
+          echo "Dataset created:"
+          ls -la data/
+
+      # Track data with DVC
+      - name: Track data with DVC
+        run: |
+          # Add data to DVC
+          dvc add data/california_housing.csv
+          
+          # Push to cache
+          dvc push -v
+          
+          # Show cache contents
+          echo "DVC cache contents:"
+          ls -la .dvc/cache
+          
+          # Show data tracking status
+          dvc status
 
       # Run code quality checks
       - name: Code quality checks
@@ -74,20 +103,7 @@ jobs:
           isort --check-only ./src ./tests
           flake8 ./src ./tests
 
-      # Create and validate dataset
-      - name: Create dataset
-        run: |
-          if [ ! -f data/california_housing.csv ]; then
-            python -m src.create_data_version
-          fi
-
-      # Setup DVC and track data
-      - name: Setup DVC tracking
-        run: |
-          dvc add data/california_housing.csv
-          dvc push
-
-      # Clean up and train model
+      # Train initial model
       - name: Train model
         run: |
           # Clean up existing model directories
@@ -109,7 +125,7 @@ jobs:
           file: ./coverage.xml
           fail_ci_if_error: true
 
-      # Store artifacts
+      # Store MLflow runs
       - name: Upload MLflow runs
         uses: actions/upload-artifact@v4
         with:
@@ -117,13 +133,16 @@ jobs:
           path: mlruns/
           retention-days: 5
 
-      - name: Upload DVC storage
+      # Store DVC cache
+      - name: Upload DVC cache
         uses: actions/upload-artifact@v4
         with:
           name: dvc-storage
-          path: dvc_storage/
+          path: .dvc/cache/
           retention-days: 5
+        if: always()
 
+      # Store trained models
       - name: Upload trained models
         uses: actions/upload-artifact@v4
         with:
@@ -131,6 +150,26 @@ jobs:
           path: models/
           retention-days: 5
         if: success()
+
+      # Debug information
+      - name: Debug Info
+        if: always()
+        run: |
+          echo "Current directory structure:"
+          ls -R
+          echo "DVC status:"
+          dvc status
+          echo "DVC remote status:"
+          dvc remote list
+          echo "Available artifacts:"
+          for dir in mlruns .dvc/cache models data; do
+            echo "Contents of \$dir:"
+            if [ -d "\$dir" ]; then
+              ls -la "\$dir"
+            else
+              echo "Directory \$dir does not exist"
+            fi
+          done
 
       # Cache DVC storage for future runs
       - name: Cache DVC storage
