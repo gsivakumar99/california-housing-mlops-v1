@@ -11,6 +11,7 @@ from sklearn.datasets import fetch_california_housing
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Initialize Flask app
 app = Flask(__name__)
 
 # Get the model directory path
@@ -24,6 +25,9 @@ LATEST_MODEL_PATH = os.path.join(MODEL_DIR, "latest", "model.pkl")
 feature_names = fetch_california_housing().feature_names
 if not isinstance(feature_names, list):
     feature_names = feature_names.tolist()
+
+# Initialize model
+model = None
 
 
 def load_model() -> Any:
@@ -43,6 +47,13 @@ def load_model() -> Any:
         logger.info("Training new model...")
         from src.train import train_model
         return train_model()
+
+
+def ensure_model_loaded() -> None:
+    """Ensure the model is loaded."""
+    global model
+    if model is None:
+        model = load_model()
 
 
 def validate_features(features: list) -> bool:
@@ -70,24 +81,6 @@ def validate_features(features: list) -> bool:
         return False
 
 
-# Initialize model as None
-model = None
-
-
-def get_model():
-    """Get or load the model.
-
-    Returns
-    -------
-    Any
-        The loaded model
-    """
-    global model
-    if model is None:
-        model = load_model()
-    return model
-
-
 @app.route("/health", methods=["GET"])
 def health_check() -> Dict[str, str]:
     """Check if the service is healthy.
@@ -98,7 +91,7 @@ def health_check() -> Dict[str, str]:
         Health status
     """
     try:
-        get_model()
+        ensure_model_loaded()
         return jsonify({"status": "healthy"})
     except Exception as e:
         logger.error(f"Health check failed: {e}")
@@ -115,6 +108,8 @@ def predict() -> Dict[str, Any]:
         Prediction results or error message
     """
     try:
+        ensure_model_loaded()
+
         if not request.is_json:
             raise ValueError("Request must be JSON")
 
@@ -130,7 +125,7 @@ def predict() -> Dict[str, Any]:
 
         # Create DataFrame and make prediction
         df = pd.DataFrame([features], columns=feature_names)
-        prediction = get_model().predict(df)
+        prediction = model.predict(df)
 
         return jsonify({
             "status": "success",
@@ -193,6 +188,7 @@ def model_version() -> Dict[str, Any]:
         Model version details
     """
     try:
+        ensure_model_loaded()
         model_info = mlflow.sklearn.get_model_info(LATEST_MODEL_PATH)
         return jsonify({
             "status": "success",
@@ -226,6 +222,7 @@ def create_app(testing: bool = False) -> Flask:
     """
     if testing:
         app.config['TESTING'] = True
+        ensure_model_loaded()
     return app
 
 
